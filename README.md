@@ -1,6 +1,6 @@
 # Computer Networks and Applications Projects
 
-## Projects Overview
+## Overview
 
 ### 1. AlternatingBit
 **Implementation of the Alternating Bit Protocol.**
