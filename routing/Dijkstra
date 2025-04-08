@@ -1,0 +1,195 @@
+#!/usr/bin/env python3
+
+import sys
+
+class Network:
+    def __init__(self):
+        # initialise empty network with sets for nodes and dictionary for edges
+        self.nodes = set()
+        self.edges = {}
+    
+    def add_edge(self, u, v, cost):
+        """
+        Add/Remove an edge in the network
+
+        Arguments:
+            u (str): Starting node of the edge
+            v (str): Ending node of the edge
+            cost (int): Cost of the edge (If -1, edge is removed)
+
+        Updates:
+            self.edges (dict): Add/remove edge with the given cost
+            self.nodes (set): Updates the set of nodes in the network
+        """
+        if cost == -1:
+            if v in self.edges.get(u, {}):
+                del self.edges[u][v]
+            if u in self.edges.get(v, {}):
+                del self.edges[v][u]
+        else:
+            if u not in self.edges:
+                self.edges[u] = {}
+            if v not in self.edges:
+                self.edges[v] = {}
+            self.edges[u][v] = cost
+            self.edges[v][u] = cost
+        self.nodes.update([u, v])
+    
+    def dijkstra(self, start):
+        """
+        Uses Dijkstra's algorithm to find shortest paths from the start node
+
+        Arguments:
+            start (str): Starting node for Dijkstra's algorithm
+
+        Returns:
+            distances (dict): Dictionary of shortest paths from the start node to each node
+            previous_nodes (dict): Dictionary of previous nodes in the shortest path tree
+        """
+        pq = [(0, start)]
+        distances = {node: float('inf') for node in self.nodes}
+        previous_nodes = {node: None for node in self.nodes}
+        distances[start] = 0
+        visited = set()
+
+        while pq:
+            pq.sort()
+            current_distance, current_node = pq.pop(0)
+            
+            if current_node in visited:
+                continue
+            visited.add(current_node)
+            
+            for neighbor, weight in self.edges.get(current_node, {}).items():
+                distance = current_distance + weight
+                
+                if distance < distances[neighbor]:
+                    distances[neighbor] = distance
+                    previous_nodes[neighbor] = current_node
+                    pq.append((distance, neighbor))
+        
+        return distances, previous_nodes
+    
+    def generate_tables(self):
+        """
+        Generates neighbour tables and LSDB (Link-State Database) for the network
+
+        Returns:
+            neighbour_tables (dict): Dictionary where each key is a node and the value is a list of neighbours with costs
+            lsdb (list): Sorted list of tuples representing edges in the network
+        """
+        neighbour_tables = {}
+        lsdb = []
+        
+        for u in self.edges:
+            neighbour_tables[u] = []
+            for v in self.edges[u]:
+                if u < v:
+                    lsdb.append((u, v, self.edges[u][v]))
+                neighbour_tables[u].append((v, self.edges[u][v]))
+        
+        for k in neighbour_tables:
+            neighbour_tables[k].sort()
+        
+        return neighbour_tables, sorted(lsdb)
+
+def print_neighbour_table(node, neighbours):
+    """
+    Prints the neighbour table for a given node
+
+    Arguments:
+        node (str): The node for which the neighbour table is printed
+        neighbours (list): A list of tuples representing neighbours and their costs
+    """
+    print(f"{node} Neighbour Table:")
+    for neighbour, cost in neighbours:
+        print(f"{neighbour}|{cost}")
+    print()
+
+def print_lsdb(node, lsdb):
+    """
+    Prints the LSDB for a given node
+
+    Arguments:
+        node (str): The node for which the LSDB is printed
+        lsdb (list): A list of tuples representing edges in the network
+    """
+    print(f"{node} LSDB:")
+    for u, v, cost in lsdb:
+        if node in (u, v):
+            print(f"{u}|{v}|{cost}")
+    print()
+
+def print_routing_table(node, distances, previous_nodes):
+    """
+    Prints the routing table for a given node based on distances and previous nodes
+
+    Arguments:
+        node (str): The node for which the routing table is printed
+        distances (dict): Dictionary of shortest paths from the node to other nodes
+        previous_nodes (dict): Dictionary of previous nodes in the shortest path tree
+    """
+    print(f"{node} Routing Table:")
+    for destination in sorted(distances):
+        if destination == node or distances[destination] == float('inf'):
+            continue
+        next_hop = destination
+        while previous_nodes[next_hop] != node and previous_nodes[next_hop] is not None:
+            next_hop = previous_nodes[next_hop]
+        print(f"{destination}|{next_hop}|{distances[destination]}")
+    print()
+
+def process_input():
+    """
+    Processes input from stdin to build the network and determine chosen routers
+
+    Returns:
+        network (Network): The constructed network based on input
+        chosen_routers (set): A set of routers to generate tables for
+    """
+    network = Network()
+    mode = None
+    chosen_routers = []
+
+    for line in sys.stdin:
+        line = line.strip()
+        
+        if line == "LINKSTATE":
+            mode = "LINKSTATE"
+        elif line == "UPDATE":
+            mode = "UPDATE"
+        elif line == "END":
+            break
+        elif mode == "LINKSTATE":
+            if '-' in line:
+                parts = line.split()
+                u, v, cost = parts[0].split('-') + [parts[1]]
+                network.add_edge(u, v, int(cost))
+                if len(parts) > 2:
+                    chosen_routers.extend(parts[2].split(','))
+        elif mode == "UPDATE":
+            if '-' in line:
+                parts = line.split()
+                u, v, cost = parts[0].split('-') + [parts[1]]
+                network.add_edge(u, v, int(cost))
+                if len(parts) > 2:
+                    chosen_routers.extend(parts[2].split(','))
+
+    return network, set(chosen_routers)
+
+def main():
+    """
+    Main function to process input, generate tables, and print them for chosen routers
+    """
+    network, chosen_routers = process_input()
+    
+    neighbour_tables, lsdb = network.generate_tables()
+
+    for node in sorted(chosen_routers):
+        distances, previous_nodes = network.dijkstra(node)
+        print_neighbour_table(node, neighbour_tables[node])
+        print_lsdb(node, lsdb)
+        print_routing_table(node, distances, previous_nodes)
+
+if __name__ == "__main__":
+    main()
